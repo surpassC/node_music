@@ -169,7 +169,7 @@
   const fetchMusicList = async () => {
     try {
       const response = await axios.get(`/music?page=${currentPage.value}&limit=${pageSize.value}`)
-      musicList.value = response.musicList // 假设返回的数据是音乐数组
+      musicList.value = response.data // 假设返回的数据是音乐数组
       totalMusic.value = response.total // 假设返回的总数在 response.total 中
     } catch (error) {
       console.error(error)

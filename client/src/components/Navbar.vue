@@ -9,6 +9,9 @@
         <el-menu-item v-if=" isAdmin" index="2" @click="navigateTo('/music')">音乐管理</el-menu-item>
         <el-menu-item v-if="isAdmin" index="3" @click="navigateTo('/genres')">流派管理</el-menu-item>
         <el-menu-item v-if="isAdmin" index="4" @click="navigateTo('/composers')">作曲家管理</el-menu-item>
+        <el-menu-item index="9" @click="navigateTo('/favorites')"  v-if="store.user && store.user.role !== 'admin'">
+          <span>我的收藏</span>
+        </el-menu-item>
         <el-menu-item v-if="isAuthenticated || isAdmin" index="6" @click="logout">登出</el-menu-item>
       </el-menu>
       <div class="user-info" v-if="isAuthenticated">
@@ -56,6 +59,9 @@ watch(route, (newRoute) => {
       break;
     case '/analysis':
       activeMenu.value = '8';
+      break;
+    case '/favorites':
+      activeMenu.value = '9';
       break;
     default:
       activeMenu.value = '1'; // 默认选中首页

@@ -9,6 +9,7 @@ import MusicList from '../components/MusicList.vue'
 import D3Chart from '../components/D3Chart.vue'
 import Analysis from '../components/Analysis.vue'
 import Map from '../components/Map.vue'
+import FavoriteList from '../components/FavoriteList.vue'
 const routes = [
   {path: '/', component: Auth},
   {path: '/music', component: MusicListManager},
@@ -18,7 +19,13 @@ const routes = [
   {path: '/composers', component: ComposerManagement},
   {path: '/d3chart', component: D3Chart},
   {path: '/analysis', component: Analysis},
-  {path: '/map', component: Map}
+  {path: '/map', component: Map},
+  {
+    path: '/favorites',
+    name: 'favorites',
+    component: FavoriteList,
+    meta: { requiresAuth: true }
+  }
 ]
 
 const router = createRouter({

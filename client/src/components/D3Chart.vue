@@ -5,8 +5,8 @@
         <h2>D3.js 流派数据可视化</h2>
         <el-button @click="drawWordCloud" :disabled="!chartData.length">生成词云</el-button>
         <el-button @click="drawBarChart" :disabled="!chartData.length">生成柱状图</el-button>
-        <!-- <el-button @click="drawPieChart" :disabled="!chartData.length">生成饼图</el-button> -->
-        <div ref="chart" class="chart" style="width: 500px; height: 400px"></div>
+        <el-button @click="drawTimeline" :disabled="!chartData.length">生成时间轴</el-button>
+        <div ref="chart" class="chart" style="width: 800px; height: 400px"></div>
       </div>
       <div class="right">
         <div class="music-list">
@@ -56,7 +56,7 @@
   const fetchMusicList = async () => {
     try {
       const response = await axios.get('/music') // 替换为实际的 API 路径
-      musicList.value = response
+      musicList.value = response.data
     } catch (error) {
       console.error(error)
       ElMessage.error('获取音乐列表失败')
@@ -315,6 +315,148 @@
 
     animate()
   }
+
+  // 绘制时间轴
+  const drawTimeline = () => {
+    if (!chartData.value || chartData.value.length === 0) return;
+
+    d3.select(chart.value).selectAll('*').remove(); // 清空之前的图表
+
+    const margin = {top: 20, right: 30, bottom: 40, left: 150};
+    const width = 800 - margin.left - margin.right;  // 增加总宽度
+    const height = 400 - margin.top - margin.bottom;
+
+    const svg = d3.select(chart.value)
+      .append('svg')
+      .attr('width', width + margin.left + margin.right)
+      .attr('height', height + margin.top + margin.bottom)
+      .append('g')
+      .attr('transform', `translate(${margin.left},${margin.top})`);
+
+    // 解析时间范围
+    const timelineData = chartData.value
+      .map(genre => {
+        const match = genre.description.match(/约(\d{4})-(\d{4}|现今)/);
+        if (match) {
+          return {
+            name: genre.name,
+            start: parseInt(match[1]),
+            end: match[2] === '现今' ? 2024 : parseInt(match[2])
+          };
+        }
+        return null;
+      })
+      .filter(d => d !== null)
+      .sort((a, b) => a.start - b.start);
+
+    // 设置比例尺
+    const xScale = d3.scaleLinear()
+      .domain([1400, 2024])
+      .range([0, width]);
+
+    const yScale = d3.scaleBand()
+      .domain(timelineData.map(d => d.name))
+      .range([0, height])
+      .padding(0.2);
+
+    // 添加X轴
+    svg.append('g')
+      .attr('transform', `translate(0,${height})`)
+      .call(d3.axisBottom(xScale)
+        .tickFormat(d => d)
+        .ticks(6));
+
+    // 添加Y轴
+    svg.append('g')
+      .call(d3.axisLeft(yScale));
+
+    // 添加标题
+    svg.append('text')
+      .attr('x', width / 2)  // 将 x 坐标设置为图表宽度的一半
+      .attr('y', -5)
+      .attr('text-anchor', 'middle')  // 保持文本居中对齐
+      .style('font-size', '16px')
+      .text('音乐流派发展时间轴');
+
+    // 绘制时间轴条形
+    const timelineBars = svg.selectAll('.timeline-bar')
+      .data(timelineData)
+      .enter()
+      .append('g')
+      .attr('class', 'timeline-bar');
+
+    // 添加时间段矩形
+    timelineBars.append('rect')
+      .attr('x', d => xScale(d.start))
+      .attr('y', d => yScale(d.name))
+      .attr('width', d => xScale(d.end) - xScale(d.start))
+      .attr('height', yScale.bandwidth())
+      .attr('fill', (d, i) => d3.schemeCategory10[i])
+      .attr('opacity', 0.7);
+
+    // 添加时间文本
+    timelineBars.append('text')
+      .attr('x', d => xScale(d.start) + (xScale(d.end) - xScale(d.start)) / 2)
+      .attr('y', d => yScale(d.name) + yScale.bandwidth() / 2)
+      .attr('dy', '0.35em')
+      .attr('text-anchor', 'middle')
+      .style('fill', 'white')
+      .style('font-size', '12px')
+      .text(d => `${d.start}-${d.end === 2024 ? '现今' : d.end}`);
+
+    // 添加提示框
+    const tooltip = d3.select(chart.value)
+      .append('div')
+      .attr('class', 'tooltip')
+      .style('opacity', 0)
+      .style('position', 'absolute')
+      .style('background-color', 'white')
+      .style('border', '1px solid #ddd')
+      .style('border-radius', '4px')
+      .style('padding', '10px')
+      .style('pointer-events', 'none')
+      .style('max-width', '300px')
+      .style('box-shadow', '0 2px 8px rgba(0,0,0,0.15)');
+
+    // 修改时间轴条形的交互效果
+    timelineBars.selectAll('rect')
+      .on('mouseover', function(event, d) {
+        const genre = chartData.value.find(g => g.name === d.name);
+        
+        d3.select(this)
+          .transition()
+          .duration(200)
+          .attr('opacity', 1);
+
+        tooltip.transition()
+          .duration(200)
+          .style('opacity', .9);
+          
+        tooltip.html(`
+          <strong>${genre.name}</strong><br/>
+          <small>${d.start}-${d.end === 2024 ? '现今' : d.end}</small><br/>
+          <p>${genre.description}</p>
+        `)
+          .style('left', (event.pageX + 10) + 'px')
+          .style('top', (event.pageY - 28) + 'px');
+      })
+      .on('mousemove', function(event) {
+        tooltip
+          .style('left', (event.pageX + 10) + 'px')
+          .style('top', (event.pageY - 28) + 'px');
+      })
+      .on('mouseout', function() {
+        d3.select(this)
+          .transition()
+          .duration(200)
+          .attr('opacity', 0.7);
+
+        tooltip.transition()
+          .duration(500)
+          .style('opacity', 0);
+      });
+  };
+
   // 组件挂载时获取数据
   onMounted(() => {
     fetchChartData() // 组件挂载时获取数据
@@ -337,7 +479,9 @@
     flex: 60%;
   }
   .chart {
-    margin-top: 20px;
+    width: 800px !important;  /* 修改宽度 */
+    height: 400px;
+    margin: 0 auto;  /* 添加自动边距使容器居中 */
   }
 
   .music-list {
@@ -363,5 +507,36 @@
 
   .music-card:hover {
     transform: scale(1.05); /* 鼠标悬停时放大 */
+  }
+
+  .timeline-bar rect:hover {
+    cursor: pointer;
+  }
+
+  .timeline-bar text {
+    pointer-events: none;
+  }
+
+  .tooltip {
+    font-size: 14px;
+    line-height: 1.4;
+    z-index: 100;
+  }
+
+  .tooltip strong {
+    color: #303133;
+    display: block;
+    margin-bottom: 4px;
+  }
+
+  .tooltip small {
+    color: #909399;
+    display: block;
+    margin-bottom: 8px;
+  }
+
+  .tooltip p {
+    color: #606266;
+    margin: 0;
   }
 </style>

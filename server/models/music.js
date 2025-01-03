@@ -2,36 +2,72 @@ const db = require('../config/db')
 
 const Music = {
   // 获取所有音乐
-  getAll: async (limit, offset) => {
-    let query = `SELECT *,
-        m.id,
-        m.title,
+  getAll: async (limit, offset, userId = null) => {
+    // 第一次查询：获取所有音乐基本信息
+    let query = `
+      SELECT 
+        m.*,
         GROUP_CONCAT(DISTINCT c.name) AS composerName,
-        GROUP_CONCAT(DISTINCT g.name) AS genreName,
-        m.information,
-        m.photo_path,
-        m.file_path
-    FROM 
+        GROUP_CONCAT(DISTINCT g.name) AS genreName
+      FROM 
         music m
-    LEFT JOIN 
+      LEFT JOIN 
         composers c ON m.composers_id = c.id
-    LEFT JOIN 
+      LEFT JOIN 
         genres g ON m.genre_id = g.id
-    GROUP BY 
-        m.id` // 默认查询所有音乐
-    const params = []
+      GROUP BY 
+        m.id`;
+
+    const params = [];
 
     if (limit !== undefined && offset !== undefined) {
-      query += ' LIMIT ? OFFSET ?' // 添加 LIMIT 和 OFFSET
-      params.push(limit, offset)
+      query += ' LIMIT ? OFFSET ?';
+      params.push(limit, offset);
     }
 
     return new Promise((resolve, reject) => {
-      db.query(query, params, (err, results) => {
-        if (err) return reject(err)
-        resolve(results)
-      })
-    })
+      db.query(query, params, async (err, results) => {
+        if (err) return reject(err);
+
+        // 调试日志：打印用户ID
+        console.log('处理用户ID:', userId);
+
+        if (!userId) {
+          console.log('没有用户ID，返回全部未收藏状态');
+          const processedResults = results.map(row => ({
+            ...row,
+            isFavorite: false
+          }));
+          return resolve(processedResults);
+        }
+
+        // 第二次查询：获取用户的收藏列表
+        const favoriteQuery = 'SELECT music_id FROM favorites WHERE user_id = ?';
+        console.log('执行收藏查询，用户ID:', userId);
+        
+        db.query(favoriteQuery, [userId], (err, favorites) => {
+          if (err) return reject(err);
+
+          // 调试日志：打印收藏数据
+          console.log('查询到的收藏:', favorites);
+
+          // 创建收藏音乐ID的集合
+          const favoriteIds = new Set(favorites.map(f => f.music_id));
+          console.log('收藏ID集合:', Array.from(favoriteIds));
+
+          // 处理结果，添加收藏状态
+          const processedResults = results.map(row => ({
+            ...row,
+            isFavorite: favoriteIds.has(row.id)
+          }));
+
+          // 调试日志：打印处理后的结果
+          console.log('处理后的结果示例:', processedResults[0]);
+
+          resolve(processedResults);
+        });
+      });
+    });
   },
   // 在 Music 模型中添加获取总记录数的方法
   getTotalCount: async () => {
@@ -92,6 +128,48 @@ const Music = {
       db.query(query, [musicId], (err, results) => {
         if (err) return reject(err)
         resolve(results[0]) // 返回单个音乐对象
+      })
+    })
+  },
+
+  // 添加收藏
+  addFavorite: async (userId, musicId) => {
+    const query = 'INSERT INTO favorites (user_id, music_id, created_at) VALUES (?, ?, NOW())'
+    return new Promise((resolve, reject) => {
+      db.query(query, [userId, musicId], (err, results) => {
+        if (err) return reject(err)
+        resolve(results)
+      })
+    })
+  },
+
+  // 取消收藏
+  removeFavorite: async (userId, musicId) => {
+    const query = 'DELETE FROM favorites WHERE user_id = ? AND music_id = ?'
+    return new Promise((resolve, reject) => {
+      db.query(query, [userId, musicId], (err, results) => {
+        if (err) return reject(err)
+        resolve(results)
+      })
+    })
+  },
+
+  // 获取用户收藏列表
+  getUserFavorites: async (userId) => {
+    const query = `
+      SELECT m.*, 
+             GROUP_CONCAT(DISTINCT c.name) AS composerName,
+             GROUP_CONCAT(DISTINCT g.name) AS genreName
+      FROM music m
+      INNER JOIN favorites f ON m.id = f.music_id
+      LEFT JOIN composers c ON m.composers_id = c.id
+      LEFT JOIN genres g ON m.genre_id = g.id
+      WHERE f.user_id = ?
+      GROUP BY m.id`
+    return new Promise((resolve, reject) => {
+      db.query(query, [userId], (err, results) => {
+        if (err) return reject(err)
+        resolve(results)
       })
     })
   }
